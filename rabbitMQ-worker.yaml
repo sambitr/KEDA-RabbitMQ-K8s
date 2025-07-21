@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rabbitmq-worker
+  namespace: test
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: rabbitmq-worker
+  template:
+    metadata:
+      labels:
+        app: rabbitmq-worker
+    spec:
+      containers:
+      - name: worker
+        image: python:3.9
+        command: ["python", "-u", "-c"]
+        args:
+          - |
+            import pika
+            def callback(ch, method, properties, body):
+                print(f" [x] Received {body}")
+                ch.basic_ack(delivery_tag=method.delivery_tag)
+
+            connection = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq'))
+            channel = connection.channel()
+            channel.queue_declare(queue='task-queue', durable=True)
+            channel.basic_qos(prefetch_count=1)
+            channel.basic_consume(queue='task-queue', on_message_callback=callback)
+            channel.start_consuming()
